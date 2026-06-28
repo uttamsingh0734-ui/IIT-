@@ -1,0 +1,198 @@
+<!-- UI aur Game Wrapper -->
+<div id="game-wrapper" style="position: relative; font-family: system-ui, sans-serif; text-align: center; background: #1a1a1a; padding: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 95vh; user-select: none; touch-action: manipulation;">
+  
+  <div style="color: #ff4757; font-size: 24px; font-weight: bold; margin-bottom: 2px;">SUPER CAR RACER</div>
+  <div id="score-tag" style="color: white; font-size: 18px; font-weight: bold; margin-bottom: 8px;">SCORE: 0</div>
+  
+  <!-- Main Game Screen -->
+  <canvas id="mainCanvas" width="340" height="420" style="background: #222; box-shadow: 0 8px 25px rgba(0,0,0,0.6); display: block; border-radius: 8px;"></canvas>
+  
+  <!-- Restart Button (Crash hone par dikhega) -->
+  <button id="reloadBtn" style="display: none; position: absolute; top: 45%; padding: 12px 30px; font-size: 18px; font-weight: bold; background: #ff4757; color: white; border: none; border-radius: 25px; cursor: pointer; z-index: 100; box-shadow: 0 4px 15px rgba(255, 71, 87, 0.4);">Restart Race</button>
+
+  <!-- MOBILE PHONE TOUCH CONTROLS (Screen par buttons) -->
+  <div id="touch-controls" style="margin-top: 15px; display: grid; grid-template-columns: repeat(3, 70px); gap: 10px; justify-content: center;">
+    <div></div>
+    <button id="btn-up" style="height: 60px; width: 60px; background: #333; color: white; border: 2px solid #555; border-radius: 50%; font-size: 24px; font-weight: bold; active: background: #555;">▲</button>
+    <div></div>
+    
+    <button id="btn-left" style="height: 60px; width: 60px; background: #333; color: white; border: 2px solid #555; border-radius: 50%; font-size: 24px; font-weight: bold;">◄</button>
+    <button id="btn-down" style="height: 60px; width: 60px; background: #333; color: white; border: 2px solid #555; border-radius: 50%; font-size: 24px; font-weight: bold;">▼</button>
+    <button id="btn-right" style="height: 60px; width: 60px; background: #333; color: white; border: 2px solid #555; border-radius: 50%; font-size: 24px; font-weight: bold;">►</button>
+  </div>
+  
+  <div style="color: #666; font-size: 11px; margin-top: 8px;">PC: W/A/S/D ya Arrows | Mobile: Tap Buttons</div>
+</div>
+
+<script>
+  (function() {
+    const canvas = document.getElementById("mainCanvas");
+    const ctx = canvas.getContext("2d");
+    const scoreTag = document.getElementById("score-tag");
+    const reloadBtn = document.getElementById("reloadBtn");
+
+    let isPlaying = true;
+    let totalScore = 0;
+    let trackVelocity = 4;
+    let enemyPool = [];
+    let roadLineY = 0;
+
+    // Sabhi inputs (Keyboard + Mobile Touch) ko handle karne ke liye variable
+    const controlInputs = { Up: false, Down: false, Left: false, Right: false };
+    
+    // Aapki Apni Car ka Size aur Initial Position
+    const userCar = {
+      x: 150,
+      y: 320,
+      w: 36,
+      h: 65,
+      handling: 5,
+      color: "#ff4757" // Bright Red color aapki gadi ke liye
+    };
+
+    // --- KEYBOARD CONTROLS (PC ke liye) ---
+    window.onkeydown = function(e) {
+      if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") controlInputs.Left = true;
+      if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") controlInputs.Right = true;
+      if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") controlInputs.Up = true;
+      if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") controlInputs.Down = true;
+    };
+
+    window.onkeyup = function(e) {
+      if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") controlInputs.Left = false;
+      if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") controlInputs.Right = false;
+      if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") controlInputs.Up = false;
+      if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") controlInputs.Down = false;
+    };
+
+    // --- PHONE TOUCH CONTROLS (Mobile ke liye) ---
+    function bindTouch(btnId, direction) {
+      const btn = document.getElementById(btnId);
+      
+      // Ungli rakhne par car chalegi
+      btn.addEventListener("touchstart", (e) => { e.preventDefault(); controlInputs[direction] = true; btn.style.background = "#ff4757"; });
+      btn.addEventListener("mousedown", (e) => { controlInputs[direction] = true; btn.style.background = "#ff4757"; });
+      
+      // Ungli hatane par car ruk jayegi
+      btn.addEventListener("touchend", (e) => { e.preventDefault(); controlInputs[direction] = false; btn.style.background = "#333"; });
+      btn.addEventListener("mouseup", (e) => { controlInputs[direction] = false; btn.style.background = "#333"; });
+      btn.addEventListener("mouseleave", () => { controlInputs[direction] = false; btn.style.background = "#333"; });
+    }
+
+    bindTouch("btn-up", "Up");
+    bindTouch("btn-down", "Down");
+    bindTouch("btn-left", "Left");
+    bindTouch("btn-right", "Right");
+
+    reloadBtn.onclick = resetEngine;
+
+    // Traffic Cars banana
+    function buildTraffic() {
+      if (!isPlaying) return;
+      const w = 36;
+      const h = 65;
+      const xPos = Math.random() * (canvas.width - w - 70) + 35;
+      const hexVariants = ["#1e90ff", "#2ed573", "#ffa502", "#a55eea"]; // Traffic colors (Blue, Green, Yellow, Purple)
+      const chosenColor = hexVariants[Math.floor(Math.random() * hexVariants.length)];
+
+      enemyPool.push({ x: xPos, y: -h, w: w, h: h, color: chosenColor });
+      setTimeout(buildTraffic, Math.max(600, 1600 - totalScore * 50));
+    }
+
+    function resetEngine() {
+      enemyPool = [];
+      totalScore = 0;
+      trackVelocity = 4;
+      userCar.x = 150;
+      userCar.y = 320;
+      scoreTag.textContent = "SCORE: " + totalScore;
+      reloadBtn.style.display = "none";
+      isPlaying = true;
+      gameLoop();
+    }
+
+    function detectCrash(r1, r2) {
+      return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x && r1.y < r2.y + r2.h && r1.y + r1.h > r2.y;
+    }
+
+    function gameLoop() {
+      if (!isPlaying) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Road Area
+      ctx.fillStyle = "#3a3a3a";
+      ctx.fillRect(30, 0, canvas.width - 60, canvas.height);
+
+      // Side Lines
+      ctx.fillStyle = "#ffa502";
+      ctx.fillRect(30, 0, 4, canvas.height);
+      ctx.fillRect(canvas.width - 34, 0, 4, canvas.height);
+
+      // White Center Strip lines moving
+      ctx.fillStyle = "#fff";
+      roadLineY += trackVelocity;
+      if (roadLineY >= 40) roadLineY = 0;
+      for (let y = roadLineY - 40; y < canvas.height; y += 40) {
+        ctx.fillRect(canvas.width / 2 - 2, y, 4, 18);
+      }
+
+      // --- Car Movements & Screen Boundaries ---
+      if (controlInputs.Left && userCar.x > 34) userCar.x -= userCar.handling;
+      if (controlInputs.Right && userCar.x < canvas.width - 34 - userCar.w) userCar.x += userCar.handling;
+      if (controlInputs.Up && userCar.y > 10) userCar.y -= userCar.handling; // Aage badhna
+      if (controlInputs.Down && userCar.y < canvas.height - userCar.h - 10) userCar.y += userCar.handling; // Peeche aana
+
+      // --- Draw Your Own Car (Red Car Design) ---
+      ctx.fillStyle = userCar.color;
+      ctx.fillRect(userCar.x, userCar.y, userCar.w, userCar.h); // Main Body
+      ctx.fillStyle = "#111"; // Windows
+      ctx.fillRect(userCar.x + 4, userCar.y + 12, userCar.w - 8, 14);
+      ctx.fillRect(userCar.x + 4, userCar.y + 42, userCar.w - 8, 10);
+      // Wheels (Slightly popping out)
+      ctx.fillStyle = "#000";
+      ctx.fillRect(userCar.x - 2, userCar.y + 8, 3, 12);
+      ctx.fillRect(userCar.x + userCar.w - 1, userCar.y + 8, 3, 12);
+      ctx.fillRect(userCar.x - 2, userCar.y + 45, 3, 12);
+      ctx.fillRect(userCar.x + userCar.w - 1, userCar.y + 45, 3, 12);
+
+      // --- Enemy Cars Loop ---
+      for (let i = enemyPool.length - 1; i >= 0; i--) {
+        let enemy = enemyPool[i];
+        enemy.y += trackVelocity;
+
+        // Draw Enemy Car
+        ctx.fillStyle = enemy.color;
+        ctx.fillRect(enemy.x, enemy.y, enemy.w, enemy.h);
+        ctx.fillStyle = "#111";
+        ctx.fillRect(enemy.x + 4, enemy.y + 12, enemy.w - 8, 14);
+
+        // Crash Detection
+        if (detectCrash(userCar, enemy)) {
+          isPlaying = false;
+          reloadBtn.style.display = "inline-block";
+          ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#ff4757";
+          ctx.font = "bold 32px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
+          return;
+        }
+
+        // Score system
+        if (enemy.y > canvas.height) {
+          enemyPool.splice(i, 1);
+          totalScore++;
+          scoreTag.textContent = "SCORE: " + totalScore;
+          if (totalScore % 5 === 0) trackVelocity += 0.5; // Level up speed
+        }
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    buildTraffic();
+    gameLoop();
+  })();
+</script>
